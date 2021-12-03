@@ -1,0 +1,4 @@
+/* Make input button/drag-n-drop larger */
+.btn-file , .form-control {
+  height: 100px;
+}
