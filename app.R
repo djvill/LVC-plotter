@@ -3,6 +3,7 @@
 library(shiny)
 library(readr)
 library(rlang)
+library(purrr)
 library(dplyr)
 library(ggplot2)
 
@@ -31,6 +32,12 @@ library(ggplot2)
 ##Show additional UI element(s) at top of main panel for debugging?
 showDebug <- FALSE
 
+##Columns excluded from selectability
+exclCols <- c("SearchName", "Number", "Transcript", "Speaker", "Line", "LineEnd", 
+              "MatchId", "URL", "Before Match", "Text", "After Match", "Target word", 
+              "Target word start", "Target word end", "Target orthography", 
+              "Match segment", "Target segment", "Target segment start", "Target segment end")
+
 
 # UI ----------------------------------------------------------------------
 
@@ -41,23 +48,26 @@ ui <- fluidPage(
   titlePanel("Plot data"),
   sidebarLayout(
     sidebarPanel(
+      ##Instructions
       p("Your data must be a CSV file that has..."),
       tags$ul(tags$li("one token in every row"), 
               tags$li("one column for your coded variants"), 
               tags$li("one column apiece for each constraint")),
+      
+      ##File upload (drag-n-drop) box
       fileInput("file",
-                label="Drag and drop your CSV in the box below",
+                label="Drag and drop your CSV into the box below",
                 buttonLabel="Browse...",
-                placeholder="Box outline must turn green",
+                placeholder="Your file here",
                 accept=".csv",
                 multiple = FALSE),
-      p() ##Placeholder for various controls, and a "Plot!" button
-      ),
+      
+      ##Configuration settings
+      uiOutput("config")),
     
     # mainPanel(verbatimTextOutput("debug"),
     mainPanel(uiOutput("debug"),
-              plotOutput("plot1"),
-              plotOutput("plot2"))
+              uiOutput("plots"))
   )
 )
 
@@ -102,7 +112,7 @@ undisplay <- function(x) {
 server <- function(input, output, session) {
   ##Read file
   df <- eventReactive(input$file, {
-    read_csv(input$file$datapath[1], na="")
+    read_csv(input$file$datapath[1], na="", show_col_types=FALSE)
   })
   
   ##Debug wrapper
@@ -120,8 +130,24 @@ server <- function(input, output, session) {
   ##Verbatim debugging text (works best if a list() of objects with names from
   ##  environment, to 'peek into' environment)
   output$debugContent <- renderPrint({
-    list(df = df())
+    list(`input$file` = input$file)
   })
+  
+  output$config <- renderUI({
+    ##Only show once data has been uploaded
+    req(df())
+    list(
+      h2("Plot configuration"),
+      h3("Specify the column with..."),
+      ##Column selection (will create 3 selection inputs)
+      c(varCol = "Coded variants", const1Col = "Constraint #1", const2Col = "Constraint #2") %>% 
+        imap(~ selectInput(.y, .x, choices=setdiff(colnames(df()), exclCols))) %>% 
+        map(tagAppendAttributes, class="selectAlign"),
+      ##"Generate plots" button
+      actionButton("genPlots", "Generate plots")
+    )
+  })
+  
   
   ##Plotting wrapper function
     ##(sym() solution from https://stackoverflow.com/a/49870618)
@@ -129,20 +155,54 @@ server <- function(input, output, session) {
     ggplot(data, aes(x=!!sym(x), fill=Variant)) + 
       geom_bar(position="fill") +
       labs(x=xlab, y="Proportion", fill="Variant") +
-      theme_bw(base_size=14)
+      theme_bw(base_size=16)
   }
   
+  ##Main panel
+  output$plots <- renderUI({
+    ##Only appear if "Generate plots" has been clicked
+    ##N.B. Once initially generated, plots will _update_ even w/o "Generate plots" being re-clicked
+    req(input$genPlots)
+    list(
+      plotOutput("plot1"),
+      plotOutput("plot2"),
+      downloadButton("downloadPlots", "Download plots"),
+      p("If you're having issues with your plots, please send the configuration data to Dan and describe the issue(s) you're having"),
+      downloadButton("downloadConfig", "Download configuration data")
+    )
+  })
+  
   output$plot1 <- renderPlot({
-    req(df())
-    
-    plotMe("Foll_seg", "Following segment")
+    plotMe(input$const1Col, "Following segment")
   })
   
   output$plot2 <- renderPlot({
-    req(df())
-    
-    plotMe("Morpho_status", "Morphological status")
+    plotMe(input$const2Col, "Morphological status")
   })
 }
+
+
+# ui <- fluidPage(
+#   textInput("name", "name"),
+#   actionButton("add", "add"),
+#   textOutput("names")
+# )
+# server <- function(input, output, session) {
+#   # r <- reactiveValues(names = character())
+#   r <- reactiveValues(names = list())
+#   observeEvent(input$add, {
+#     # r$names <- c(input$name, r$names)
+#     output$nm <- renderText(input$name)
+#     r$names <- c(textOutput("nm"), r$names)
+#     updateTextInput(session, "name", value = "")
+#   })
+#   
+#   # output$names <- renderText(r$names)
+#   output$names <- renderUI(r$names)
+# }
+
+
+
+
 
 shinyApp(ui, server)

@@ -1,4 +1,24 @@
+/* Column selections */
+.selectAlign {
+  display: flex;
+  flex-direction: row;
+}
+.selectAlign > label {
+  width: 40%;
+}
+.selectAlign > div {
+  width: 100%;
+}
+
 /* Make input button/drag-n-drop larger */
 .btn-file , .form-control {
   height: 100px;
+}
+
+
+
+/* More space below download button */
+a#downloadPlots {
+  margin-bottom: 30px;
+  font-weight: bold;
 }
