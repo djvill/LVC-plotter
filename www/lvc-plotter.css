@@ -1,3 +1,8 @@
+/* Make input button/drag-n-drop larger */
+.btn-file , .form-control {
+  height: 100px;
+}
+
 /* Column selections */
 .selectAlign {
   display: flex;
@@ -10,12 +15,18 @@
   width: 100%;
 }
 
-/* Make input button/drag-n-drop larger */
-.btn-file , .form-control {
-  height: 100px;
+/* "Modify columns" menu */
+.margin-top-0 {
+  margin-top: 0px;
+}
+#modColMenu + div {
+  margin-left: 20px;
 }
 
-
+/* "Generate plots" button */
+button#genPlots {
+  font-weight: bold;
+}
 
 /* More space below download button */
 a#downloadPlots {

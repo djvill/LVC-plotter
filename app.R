@@ -133,19 +133,62 @@ server <- function(input, output, session) {
     list(`input$file` = input$file)
   })
   
+  ##Config options
   output$config <- renderUI({
     ##Only show once data has been uploaded
     req(df())
-    list(
+    
+    tagList(
       h2("Plot configuration"),
-      h3("Specify the column with..."),
+      
       ##Column selection (will create 3 selection inputs)
+      h3("Specify columns"),
       c(varCol = "Coded variants", const1Col = "Constraint #1", const2Col = "Constraint #2") %>% 
         imap(~ selectInput(.y, .x, choices=setdiff(colnames(df()), exclCols))) %>% 
         map(tagAppendAttributes, class="selectAlign"),
+      
+      ##Modify column contents
+      # fluidRow(
+      #   column(8, h3("Modify columns")),
+      #   column(4, actionButton("hideshow_modCols", "Show menu")),
+      # ),
+      fluidRow(
+        column(8, h3("Modify columns", class="margin-top-0")),
+        column(4, actionButton("hideshow_modCols", "Show menu")),
+      ),
+      tabsetPanel(
+        id = "modColMenu",
+        # Hide the tab values.
+        # Can only switch tabs by using `updateTabsetPanel()`
+        type = "hidden",
+        tabPanelBody("hidden"),
+        tabPanelBody("shown", 
+                     tagList(
+                       # selectInput("modCol", "Column to modify", 
+                       #             c(input$varCol,input$const1Col,input$const2Col)),
+                       p("Here's some content")
+                     )
+        )
+      ),
+      
+      
       ##"Generate plots" button
+      hr(),
       actionButton("genPlots", "Generate plots")
     )
+  })
+  
+  ##Control appearance of "modify columns" menu
+  observeEvent(input$hideshow_modCols, {
+    if (input$modColMenu=="hidden") {
+      newTab <- "shown"
+      newLabel <- "Hide menu"
+    } else {
+      newTab <- "hidden"
+      newLabel <- "Show menu"
+    }
+    updateTabsetPanel(session, "modColMenu", selected=newTab)
+    updateActionButton(session, "hideshow_modCols", label=newLabel)
   })
   
   
@@ -163,7 +206,7 @@ server <- function(input, output, session) {
     ##Only appear if "Generate plots" has been clicked
     ##N.B. Once initially generated, plots will _update_ even w/o "Generate plots" being re-clicked
     req(input$genPlots)
-    list(
+    tagList(
       plotOutput("plot1"),
       plotOutput("plot2"),
       downloadButton("downloadPlots", "Download plots"),
@@ -180,28 +223,6 @@ server <- function(input, output, session) {
     plotMe(input$const2Col, "Morphological status")
   })
 }
-
-
-# ui <- fluidPage(
-#   textInput("name", "name"),
-#   actionButton("add", "add"),
-#   textOutput("names")
-# )
-# server <- function(input, output, session) {
-#   # r <- reactiveValues(names = character())
-#   r <- reactiveValues(names = list())
-#   observeEvent(input$add, {
-#     # r$names <- c(input$name, r$names)
-#     output$nm <- renderText(input$name)
-#     r$names <- c(textOutput("nm"), r$names)
-#     updateTextInput(session, "name", value = "")
-#   })
-#   
-#   # output$names <- renderText(r$names)
-#   output$names <- renderUI(r$names)
-# }
-
-
 
 
 
