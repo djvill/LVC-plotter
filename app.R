@@ -5,6 +5,8 @@ library(readr)
 library(rlang)
 library(purrr)
 library(dplyr)
+library(stringr)
+library(forcats)
 library(ggplot2)
 
 
@@ -33,7 +35,7 @@ testFile <- "./TestData2.csv"
 
 ##Debugging
 ##Show additional UI element(s) at top of main panel for debugging?
-showDebug <- FALSE
+showDebug <- T
 
 ##Columns excluded from selectability
 exclCols <- c("SearchName", "Number", "Transcript", "Speaker", "Line", "LineEnd", 
@@ -144,7 +146,23 @@ server <- function(input, output, session) {
   ##Verbatim debugging text (works best if a list() of objects with names from
   ##  environment, to 'peek into' environment)
   output$debugContent <- renderPrint({
-    list(`input$file` = input$file)
+    list(`labelMaps$Foll_seg` = labelMaps$Foll_seg,
+         `labelsNew$Foll_seg` = labelsNew$Foll_seg,
+         `input$modCol` = input$modCol,
+         `labelMaps[[input$modCol]]` = labelMaps[[input$modCol]],
+         `input[["labelMap_Variant_Deleted"]]` = input[["labelMap_Variant_Deleted"]],
+         `input[["labelMap_Foll_seg_Cons"]]` = input[["labelMap_Foll_seg_Cons"]],
+         labelsNewIds = labelsNewIds(),
+         `labelsNewIds() %>% map(~ input[[.x]])` = labelsNewIds() %>% map_chr(~ input[[.x]]),
+         `str_subset(labelsNewIds(), input$modCol)` = str_subset(labelsNewIds(), input$modCol),
+         `str_subset(labelsNewIds(), input$modCol) %>% map(~ input[[.x]])` = str_subset(labelsNewIds(), input$modCol) %>% map(~ input[[.x]])
+         # labelsNewIds = labelsNewIds
+         # `input[[paste("labelMap", input$modCol)]]` = input[[paste("labelMap", input$modCol)]]
+         # `updateMaps()` = updateMaps()
+         # `names(labelMaps[[input$modCol]])` = names(labelMaps[[input$modCol]]),
+         # `map_chr(labelMaps[[input$modCol]], ~ input[[paste("labelMap", input$modCol, .x)]] %||% "")` =
+         #   map_chr(labelMaps[[input$modCol]], ~ input[[paste("labelMap", input$modCol, .x)]] %||% "")
+         )
   })
   
   ##Config options
@@ -166,6 +184,11 @@ server <- function(input, output, session) {
   })
   
   ##Column modification
+  labelMaps <- reactiveValues()
+  labelsNew <- reactiveValues()
+  labelsNew2 <- reactiveValues()
+  labelsNewIds <- reactiveVal(character(0))
+  # labelsNewIds <- character(0)
   output$modifyCol <- renderUI({
     ##Only show once data has been uploaded
     req(df())
@@ -183,25 +206,106 @@ server <- function(input, output, session) {
         tabPanelBody("hidden"),
         tabPanelBody("shown", 
                      tagList(
-                       ##Start with empty select
+                       ##Start with empty select (filled in by the time user sees it)
                        selectInput("modCol", "Column to modify", ""),
-                       p("Here's some content")
+                       textAreaInput("newLabs", 
+                                     "New labels (one per line, in preferred order of appearance)", rows=3),
+                       uiOutput("labelMap")
                      )
         )
       ),
     )
   })
   
-  ##Change modCol select list when columns change
+  ##Change modCol options & labelMaps labels when different column selected
   observeEvent(input$varCol, {
     updateSelectInput(session, "modCol", choices=c(input$varCol, input$const1Col, input$const2Col))
+    labelMaps[[input$varCol]] <- unique(df()[[input$varCol]])
+    labelsNew[[input$varCol]] <- unique(df()[[input$varCol]])
+    labelsNew2[[input$varCol]] <- unique(df()[[input$varCol]])
   })
   observeEvent(input$const1Col, {
     updateSelectInput(session, "modCol", choices=c(input$varCol, input$const1Col, input$const2Col))
+    labelMaps[[input$const1Col]] <- unique(df()[[input$const1Col]])
+    labelsNew[[input$const1Col]] <- unique(df()[[input$const1Col]])
+    labelsNew2[[input$const1Col]] <- unique(df()[[input$const1Col]])
   })
   observeEvent(input$const2Col, {
     updateSelectInput(session, "modCol", choices=c(input$varCol, input$const1Col, input$const2Col))
+    labelMaps[[input$const2Col]] <- unique(df()[[input$const2Col]])
+    labelsNew[[input$const2Col]] <- unique(df()[[input$const2Col]])
+    labelsNew2[[input$const2Col]] <- unique(df()[[input$const2Col]])
   })
+  
+  ##Change textAreaInput value when modCol changes
+  observeEvent(input$modCol, {
+    req(input$modCol)
+    # updateTextAreaInput(session, "newLabs", value=labelMaps[[input$modCol]] %>% paste(collapse="\n"))
+    updateTextAreaInput(session, "newLabs", value=labelsNew[[input$modCol]] %>% paste(collapse="\n"))
+  })
+  
+  ##Update stored column labels when newLabs text changes
+  observeEvent(input$newLabs, {
+    req(input$newLabs)
+    # names(labelMaps[[input$modCol]]) <- strsplit(input$newLabs, "\n", fixed=TRUE)[[1]]
+    labelsNew[[input$modCol]] <- strsplit(input$newLabs, "\n", fixed=TRUE)[[1]]
+  })
+  
+  ##Dynamically add selectInput()s to end of modifyCol to facilitate recoding
+  output$labelMap <- renderUI({
+    imap(labelMaps[[input$modCol]], ~ {
+      ##Default mapping choice
+      defaultMap <-
+        if (is.character(.y)) {
+          ##If mappings have already been specified, load them
+          .y
+        } else if (.x %in% labelsNew[[input$modCol]]) {
+          ##Otherwise if old label is in list of new labels, default to old label
+          .x
+        } else {
+          ##Otherwise default to first label
+          labelsNew[[input$modCol]][1]
+        }
+      
+      ##Add ID to list of select IDs
+      newID <- paste("labelMap", input$modCol, .x, sep="_")
+      labelsNewIds(unique(c(labelsNewIds(), newID)))
+      # labelsNewIds <- unique(c(labelsNewIds, newID))
+      
+      ##Set up select
+      selectInput(newID,
+                  paste("New label for", .x),
+                  c(labelsNew[[input$modCol]],"(Exclude from plot)"),
+                  ##Default mapping choice
+                  selected=defaultMap)
+    })
+  }) %>% 
+    ##Only update when newLabs is updated
+    bindEvent(input$newLabs)
+  
+  reactive({
+    str_subset(labelsNewIds(), input$modCol) %>%
+      map(~ observeEvent(input[[.x]], {
+        names(labelMaps[[input$modCol]]) <- input[[.x]]
+      }))
+  })
+  
+  ##Store new mapping
+  #   map(1:2, ~ observeEvent(input[[paste0("button",.x)]], outText(c(outText(), "YES"))))
+  # map(labelsNewIds(), 
+  #     ~ observeEvent(input[[.x]], {
+  #       names(labelMaps[[input$modCol]]) <-
+  #         map_chr(labelMaps[[input$modCol]], 
+  #                 ~ input[[paste("labelMap", input$modCol, .x)]] %||% "")
+  #     })
+  # )
+  # observeEvent(input[["labelMap_Variant_Deleted"]], {
+  #   names(labelMaps[[input$modCol]]) <-
+  #     map_chr(labelMaps[[input$modCol]], 
+  #             ~ input[[paste("labelMap", input$modCol, .x)]] %||% "")
+  #             # ~ input[[paste("labelMap", input$modCol, .x)]])
+  # })
+  
   
   
   ##"Generate plots" button
@@ -209,10 +313,7 @@ server <- function(input, output, session) {
     ##Only show once data has been uploaded
     req(df())
     
-    tagList(
-      hr(),
-      actionButton("genPlots", "Generate plots")
-    )
+    actionButton("genPlots", "Generate plots")
   })
   
   ##Control appearance of "modify columns" menu
@@ -264,6 +365,22 @@ server <- function(input, output, session) {
     bindEvent(input$genPlots)
 }
 
-
+# ui <- fluidPage(
+#   actionButton("button1", "Button 1"),
+#   actionButton("button2", "Button 2"),
+#   actionButton("button3", "Button 3"),
+#   actionButton("reset", "RESET"),
+#   textOutput("yesno")
+# )
+# 
+# server <- function(input, output, session) {
+#   outText <- reactiveVal("NULL")
+#   output$yesno <- renderText(outText())
+# 
+#   # observeEvent(input$button1, outText("YES"))
+#   # observeEvent(input$button2, outText("YES"))
+#   map(1:2, ~ observeEvent(input[[paste0("button",.x)]], outText(c(outText(), "YES"))))
+#   observeEvent(input$reset, outText("NULL"))
+# }
 
 shinyApp(ui, server)

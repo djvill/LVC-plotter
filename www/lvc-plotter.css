@@ -22,6 +22,10 @@
 #modColMenu + div {
   margin-left: 20px;
 }
+.labAlign {
+  display: flex;
+  flex-direction: row;
+}
 
 /* "Generate plots" button */
 button#genPlots {
