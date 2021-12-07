@@ -28,6 +28,9 @@ library(ggplot2)
 
 # Parameters ------------------------------------------------------------------
 
+##Automatically use given csv to expedite testing; set to NULL to force drag-n-drop
+testFile <- "./TestData2.csv"
+
 ##Debugging
 ##Show additional UI element(s) at top of main panel for debugging?
 showDebug <- FALSE
@@ -63,7 +66,11 @@ ui <- fluidPage(
                 multiple = FALSE),
       
       ##Configuration settings
-      uiOutput("config")),
+      uiOutput("selectCol"),
+      uiOutput("modifyCol"),
+      uiOutput("genPlotsButton")
+    ),
+      # uiOutput("config")),
     
     # mainPanel(verbatimTextOutput("debug"),
     mainPanel(uiOutput("debug"),
@@ -111,9 +118,16 @@ undisplay <- function(x) {
 
 server <- function(input, output, session) {
   ##Read file
-  df <- eventReactive(input$file, {
-    read_csv(input$file$datapath[1], na="", show_col_types=FALSE)
-  })
+  if (is.null(testFile) || !file.exists(testFile)) {
+    ##If no test file specified, file must be uploaded via drag-n-drop
+    df <- eventReactive(input$file, {
+      read_csv(input$file$datapath[1], na="", show_col_types=FALSE)
+    })
+  } else if (file.exists(testFile)) {
+    df <- eventReactive(TRUE, {
+      read_csv(testFile, na="", show_col_types=FALSE)
+    })
+  }
   
   ##Debug wrapper
   output$debug <- renderUI({
@@ -134,7 +148,9 @@ server <- function(input, output, session) {
   })
   
   ##Config options
-  output$config <- renderUI({
+  ##Column selection
+  # output$config <- renderUI({
+  output$selectCol <- renderUI({
     ##Only show once data has been uploaded
     req(df())
     
@@ -146,12 +162,15 @@ server <- function(input, output, session) {
       c(varCol = "Coded variants", const1Col = "Constraint #1", const2Col = "Constraint #2") %>% 
         imap(~ selectInput(.y, .x, choices=setdiff(colnames(df()), exclCols))) %>% 
         map(tagAppendAttributes, class="selectAlign"),
-      
-      ##Modify column contents
-      # fluidRow(
-      #   column(8, h3("Modify columns")),
-      #   column(4, actionButton("hideshow_modCols", "Show menu")),
-      # ),
+    )
+  })
+  
+  ##Column modification
+  output$modifyCol <- renderUI({
+    ##Only show once data has been uploaded
+    req(df())
+    
+    tagList(
       fluidRow(
         column(8, h3("Modify columns", class="margin-top-0")),
         column(4, actionButton("hideshow_modCols", "Show menu")),
@@ -164,15 +183,33 @@ server <- function(input, output, session) {
         tabPanelBody("hidden"),
         tabPanelBody("shown", 
                      tagList(
-                       # selectInput("modCol", "Column to modify", 
-                       #             c(input$varCol,input$const1Col,input$const2Col)),
+                       ##Start with empty select
+                       selectInput("modCol", "Column to modify", ""),
                        p("Here's some content")
                      )
         )
       ),
-      
-      
-      ##"Generate plots" button
+    )
+  })
+  
+  ##Change modCol select list when columns change
+  observeEvent(input$varCol, {
+    updateSelectInput(session, "modCol", choices=c(input$varCol, input$const1Col, input$const2Col))
+  })
+  observeEvent(input$const1Col, {
+    updateSelectInput(session, "modCol", choices=c(input$varCol, input$const1Col, input$const2Col))
+  })
+  observeEvent(input$const2Col, {
+    updateSelectInput(session, "modCol", choices=c(input$varCol, input$const1Col, input$const2Col))
+  })
+  
+  
+  ##"Generate plots" button
+  output$genPlotsButton <- renderUI({
+    ##Only show once data has been uploaded
+    req(df())
+    
+    tagList(
       hr(),
       actionButton("genPlots", "Generate plots")
     )
@@ -204,7 +241,6 @@ server <- function(input, output, session) {
   ##Main panel
   output$plots <- renderUI({
     ##Only appear if "Generate plots" has been clicked
-    ##N.B. Once initially generated, plots will _update_ even w/o "Generate plots" being re-clicked
     req(input$genPlots)
     tagList(
       plotOutput("plot1"),
@@ -215,13 +251,17 @@ server <- function(input, output, session) {
     )
   })
   
+  ##Render plots
   output$plot1 <- renderPlot({
-    plotMe(input$const1Col, "Following segment")
-  })
-  
+    plotMe(input$const1Col, input$const1Col)
+  }) %>% 
+    ##Only run when "Generate plots" is clicked
+    bindEvent(input$genPlots)
   output$plot2 <- renderPlot({
-    plotMe(input$const2Col, "Morphological status")
-  })
+    plotMe(input$const2Col, input$const2Col)
+  }) %>% 
+    ##Only run when "Generate plots" is clicked
+    bindEvent(input$genPlots)
 }
 
 
