@@ -49,7 +49,9 @@ ui <- fluidPage(
   tags$head(
     tags$link(rel = "stylesheet", type = "text/css", href = "lvc-plotter.css")
   ),
-  titlePanel("Plot data"),
+  titlePanel("Plot LVC data"),
+  h4("Dan Villarreal (University of Pittsburgh)"), 
+  h4("Linguistic Variation & Change (LING 1269) Fall 2021"),
   sidebarLayout(
     sidebarPanel(
       ##Instructions
@@ -73,7 +75,8 @@ ui <- fluidPage(
     
     mainPanel(uiOutput("debug"),
               uiOutput("plots"))
-  )
+  ),
+  p("App code on ", a("GitHub", href="https://github.com/djvill/LVC-plotter"), class="footer")
 )
 
 
@@ -201,13 +204,11 @@ server <- function(input, output, session) {
   
   ##Render plots
   output$plot1 <- renderPlot({
-    # plotMe(input$const1Col, input$const1Col)
     plotMe(input$const1Col, input$varCol)
   }) %>% 
     ##Only run when "Generate plots" is clicked
     bindEvent(input$genPlots)
   output$plot2 <- renderPlot({
-    # plotMe(input$const2Col, input$const2Col)
     plotMe(input$const2Col, input$varCol)
   }) %>% 
     ##Only run when "Generate plots" is clicked
