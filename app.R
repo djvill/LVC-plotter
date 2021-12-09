@@ -72,9 +72,7 @@ ui <- fluidPage(
       uiOutput("modifyCol"),
       uiOutput("genPlotsButton")
     ),
-      # uiOutput("config")),
     
-    # mainPanel(verbatimTextOutput("debug"),
     mainPanel(uiOutput("debug"),
               uiOutput("plots"))
   )
@@ -146,28 +144,17 @@ server <- function(input, output, session) {
   ##Verbatim debugging text (works best if a list() of objects with names from
   ##  environment, to 'peek into' environment)
   output$debugContent <- renderPrint({
-    list(`labelMaps$Foll_seg` = labelMaps$Foll_seg,
-         `labelsNew$Foll_seg` = labelsNew$Foll_seg,
-         `input$modCol` = input$modCol,
+    list(#`labelMaps$Foll_seg` = labelMaps$Foll_seg,
+         # `labelsNew$Foll_seg` = labelsNew$Foll_seg,
+         # `input$modCol` = input$modCol,
          `labelMaps[[input$modCol]]` = labelMaps[[input$modCol]],
-         `input[["labelMap_Variant_Deleted"]]` = input[["labelMap_Variant_Deleted"]],
-         `input[["labelMap_Foll_seg_Cons"]]` = input[["labelMap_Foll_seg_Cons"]],
-         labelsNewIds = labelsNewIds(),
-         `labelsNewIds() %>% map(~ input[[.x]])` = labelsNewIds() %>% map_chr(~ input[[.x]]),
-         `str_subset(labelsNewIds(), input$modCol)` = str_subset(labelsNewIds(), input$modCol),
-         `str_subset(labelsNewIds(), input$modCol) %>% map(~ input[[.x]])` = str_subset(labelsNewIds(), input$modCol) %>% map(~ input[[.x]])
-         # labelsNewIds = labelsNewIds
-         # `input[[paste("labelMap", input$modCol)]]` = input[[paste("labelMap", input$modCol)]]
-         # `updateMaps()` = updateMaps()
-         # `names(labelMaps[[input$modCol]])` = names(labelMaps[[input$modCol]]),
-         # `map_chr(labelMaps[[input$modCol]], ~ input[[paste("labelMap", input$modCol, .x)]] %||% "")` =
-         #   map_chr(labelMaps[[input$modCol]], ~ input[[paste("labelMap", input$modCol, .x)]] %||% "")
+         `labelsNew[[input$modCol]]` = labelsNew[[input$modCol]],
+         labelsNewIds = labelsNewIds()
          )
   })
   
   ##Config options
   ##Column selection
-  # output$config <- renderUI({
   output$selectCol <- renderUI({
     ##Only show once data has been uploaded
     req(df())
@@ -188,7 +175,7 @@ server <- function(input, output, session) {
   labelsNew <- reactiveValues()
   labelsNew2 <- reactiveValues()
   labelsNewIds <- reactiveVal(character(0))
-  # labelsNewIds <- character(0)
+  jon <- reactiveVal(character(0))
   output$modifyCol <- renderUI({
     ##Only show once data has been uploaded
     req(df())
@@ -240,18 +227,23 @@ server <- function(input, output, session) {
   ##Change textAreaInput value when modCol changes
   observeEvent(input$modCol, {
     req(input$modCol)
-    # updateTextAreaInput(session, "newLabs", value=labelMaps[[input$modCol]] %>% paste(collapse="\n"))
     updateTextAreaInput(session, "newLabs", value=labelsNew[[input$modCol]] %>% paste(collapse="\n"))
   })
   
   ##Update stored column labels when newLabs text changes
   observeEvent(input$newLabs, {
     req(input$newLabs)
-    # names(labelMaps[[input$modCol]]) <- strsplit(input$newLabs, "\n", fixed=TRUE)[[1]]
     labelsNew[[input$modCol]] <- strsplit(input$newLabs, "\n", fixed=TRUE)[[1]]
   })
   
+  triggerNewLabs <- reactiveVal(logical())
+  observeEvent(input$newLabs, priority=1, {
+    triggerNewLabs(c(triggerNewLabs(), TRUE))
+    print(c(`input$newLabs` = input$newLabs))
+  })
+  
   ##Dynamically add selectInput()s to end of modifyCol to facilitate recoding
+  
   output$labelMap <- renderUI({
     imap(labelMaps[[input$modCol]], ~ {
       ##Default mapping choice
@@ -270,7 +262,6 @@ server <- function(input, output, session) {
       ##Add ID to list of select IDs
       newID <- paste("labelMap", input$modCol, .x, sep="_")
       labelsNewIds(unique(c(labelsNewIds(), newID)))
-      # labelsNewIds <- unique(c(labelsNewIds, newID))
       
       ##Set up select
       selectInput(newID,
@@ -281,30 +272,76 @@ server <- function(input, output, session) {
     })
   }) %>% 
     ##Only update when newLabs is updated
-    bindEvent(input$newLabs)
+    # bindEvent(input$newLabs)
+    bindEvent(triggerNewLabs())
   
-  reactive({
-    str_subset(labelsNewIds(), input$modCol) %>%
-      map(~ observeEvent(input[[.x]], {
-        names(labelMaps[[input$modCol]]) <- input[[.x]]
-      }))
+  
+  
+  # observeEvent(input[["labelMap_Variant_Deleted"]], {
+  #   jon(jon(), input[["labelMap_Variant_Deleted"]])
+  # })
+  # observeEvent(input[["labelMap_Foll_seg_Cons"]], {
+  #   jon(jon(), input[["labelMap_Foll_seg_Cons"]])
+  # })
+  # observeEvent(input[["labelMap_Variant_Deleted"]], {
+  #   names(labelMaps[["Variant"]])[labelMaps[["Variant"]]=="Deleted"] <- input[["labelMap_Variant_Deleted"]]
+  # })
+  # observeEvent(input[["labelMap_Variant_Retained"]], {
+  #   names(labelMaps[["Variant"]])[labelMaps[["Variant"]]=="Retained"] <- input[["labelMap_Variant_Retained"]]
+  # })
+  
+  ##Need to trigger observeEvent() based on any labelsNewIds()
+  # observeEvent(labelsNewIds(), {
+  observeEvent(input$modCol, priority=-1, {
+    if (length(labelsNewIds() > 0)) {
+      
+      # print(`input$modCol` = input$modCol)
+      
+      # labelMaps[[input$modCol]] <- map_chr(
+      # map_chr(
+      #   labelMaps[[input$modCol]],
+      #   # ~ set_names(.x,
+      #   ~ set_names(labelMaps[[input$modCol]][labelMaps[[input$modCol]]==.x],
+      #               input[[paste("labelMap", input$modCol, .x, sep="_")]]))
+      
+      print(c(`input$modCol` = input$modCol))
+      
+      print(c(
+        Deleted = input[[paste("labelMap", input$modCol, "Deleted", sep="_")]],
+        Retained = input[[paste("labelMap", input$modCol, "Retained", sep="_")]],
+        Cons = input[[paste("labelMap", input$modCol, "Cons", sep="_")]],
+        `Non-C` = input[[paste("labelMap", input$modCol, "Non-C", sep="_")]]
+      ))
+      
+      # map_chr(labelMaps[[input$modCol]],
+      #         ~ input[[paste("labelMap", input$modCol, .x, sep="_")]]) %>% 
+      #   print()
+    }
+    
+    # if (length(labelsNewIds()) > 0) {
+    #   print(set_names(labelMaps[[input$modCol]], 
+    #                   input[[paste("labelMap", input$modCol, labelMaps[[input$modCol]], sep="_")]]))
+    # }
+    
+    
+    # map(labelMaps[[input$modCol]], ~ {
+    #   ##Get column currently being modified
+    #   modCol <- input$modCol
+    #   ##Get label from selectInput() id
+    #   lab <- .x %>% str_remove(paste0("labelMap_", modCol, "_"))
+    #   # names(labelMaps[["Variant"]])[labelMaps[["Variant"]]=="Retained"] <- input[["labelMap_Variant_Retained"]]
+    #   # names(labelMaps[[input$modCol]])[labelMaps[[input$modCol]]=="Deleted"] <- input[[.x]]
+    # 
+    #   ##Store value of selectInput() as name of labelMaps[[col]] for matching label
+    #   names(labelMaps[[modCol]])[labelMaps[[modCol]]==lab] <- input[[.x]]
+    # 
+    #   message(modCol)
+    #   message(.x)
+    #   message(lab)
+    # })
   })
   
-  ##Store new mapping
-  #   map(1:2, ~ observeEvent(input[[paste0("button",.x)]], outText(c(outText(), "YES"))))
-  # map(labelsNewIds(), 
-  #     ~ observeEvent(input[[.x]], {
-  #       names(labelMaps[[input$modCol]]) <-
-  #         map_chr(labelMaps[[input$modCol]], 
-  #                 ~ input[[paste("labelMap", input$modCol, .x)]] %||% "")
-  #     })
-  # )
-  # observeEvent(input[["labelMap_Variant_Deleted"]], {
-  #   names(labelMaps[[input$modCol]]) <-
-  #     map_chr(labelMaps[[input$modCol]], 
-  #             ~ input[[paste("labelMap", input$modCol, .x)]] %||% "")
-  #             # ~ input[[paste("labelMap", input$modCol, .x)]])
-  # })
+  
   
   
   
@@ -365,22 +402,5 @@ server <- function(input, output, session) {
     bindEvent(input$genPlots)
 }
 
-# ui <- fluidPage(
-#   actionButton("button1", "Button 1"),
-#   actionButton("button2", "Button 2"),
-#   actionButton("button3", "Button 3"),
-#   actionButton("reset", "RESET"),
-#   textOutput("yesno")
-# )
-# 
-# server <- function(input, output, session) {
-#   outText <- reactiveVal("NULL")
-#   output$yesno <- renderText(outText())
-# 
-#   # observeEvent(input$button1, outText("YES"))
-#   # observeEvent(input$button2, outText("YES"))
-#   map(1:2, ~ observeEvent(input[[paste0("button",.x)]], outText(c(outText(), "YES"))))
-#   observeEvent(input$reset, outText("NULL"))
-# }
 
 shinyApp(ui, server)
