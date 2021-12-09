@@ -5,6 +5,7 @@ library(readr)
 library(rlang)
 library(dplyr)
 library(purrr)
+library(magrittr)
 library(ggplot2)
 
 
@@ -139,6 +140,7 @@ server <- function(input, output, session) {
     })
   }
   
+  
   ##Debug wrapper
   output$debug <- renderUI({
     out <- verbatimTextOutput("debugContent")
@@ -188,7 +190,7 @@ server <- function(input, output, session) {
     ggplot(data, aes(x=!!sym(constraint), fill=!!sym(variant))) + 
       geom_bar(position="fill") +
       labs(x=constraint, y="Proportion", fill=variant) +
-      theme_bw(base_size=16)
+      theme_bw(base_size=20)
   }
   
   ##Main panel
@@ -196,11 +198,51 @@ server <- function(input, output, session) {
     ##Only appear if "Generate plots" has been clicked
     req(input$genPlots)
     tagList(
+      h3(textOutput("tokenCount"), class="summary"),
+      # h3(textOutput("variantDist"), class="summary"),
+      uiOutput("variantDist"),
+      uiOutput("constDists"),
       plotOutput("plot1"),
       plotOutput("plot2"),
       h3("If you right-click on a plot and click 'Copy image', you can paste it into your presentation")
     )
   })
+  
+  ##Summary stats
+  output$tokenCount <- renderText({
+    ##Put together string
+    paste0("Token count: ", sum(!is.na(df()[[input$varCol]])))
+  }) %>% 
+    ##Only run when "Generate plots" is clicked
+    bindEvent(input$genPlots)
+  
+  distrib <- function(col, data=df()) {
+    tags$ul(
+      data %>% 
+        filter(!is.na(!!col)) %>% 
+        pull(!!col) %>% 
+        factor() %>% 
+        summary() %>% 
+        divide_by(sum(.)) %>% 
+        multiply_by(100) %>% 
+        round(1) %>% 
+        paste(names(.), sep="% ") %>% 
+        map(h4) %>% 
+        map(tags$li),
+      class="summary"
+    )
+  }
+  
+  ##Variant distribution
+  # output$variantDist <- renderText({
+  output$variantDist <- renderUI({
+    tagList(
+      h3("Variant distribution:", class="summary"),
+      distrib(input$varCol)
+    )
+  }) %>% 
+    ##Only run when "Generate plots" is clicked
+    bindEvent(input$genPlots)
   
   ##Render plots
   output$plot1 <- renderPlot({
