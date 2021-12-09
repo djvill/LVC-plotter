@@ -2,8 +2,6 @@
 
 ## branch `main`
 
-- Save plots
-- ~~Export environment for debugging~~ Not necessary on `main` because the environment is so simple
 
 
 ## branch `modify-cols`

@@ -3,8 +3,8 @@
 library(shiny)
 library(readr)
 library(rlang)
-library(purrr)
 library(dplyr)
+library(purrr)
 library(ggplot2)
 
 
@@ -118,10 +118,19 @@ server <- function(input, output, session) {
   ##Read file
   if (is.null(testFile) || !file.exists(testFile)) {
     ##If no test file specified, file must be uploaded via drag-n-drop
+    
     df <- eventReactive(input$file, {
-      read_csv(input$file$datapath[1], na="", show_col_types=FALSE)
+      filePath <- input$file$datapath[1]
+      if (endsWith(filePath, ".csv")) {
+        read_csv(filePath, na="", show_col_types=FALSE)
+      } else if (grepl("\\.xlsx?$", filePath)) {
+        readxl::read_excel(filePath, na="")
+      } else {
+        stop("File must be a CSV or Excel file")
+      }
     })
   } else if (file.exists(testFile)) {
+    ##If test file exists, 
     df <- eventReactive(TRUE, {
       read_csv(testFile, na="", show_col_types=FALSE)
     })
@@ -172,10 +181,10 @@ server <- function(input, output, session) {
   
   ##Plotting wrapper function
     ##(sym() solution from https://stackoverflow.com/a/49870618)
-  plotMe <- function(x, xlab, data=df()) {
-    ggplot(data, aes(x=!!sym(x), fill=Variant)) + 
+  plotMe <- function(constraint, variant, data=df()) {
+    ggplot(data, aes(x=!!sym(constraint), fill=!!sym(variant))) + 
       geom_bar(position="fill") +
-      labs(x=xlab, y="Proportion", fill="Variant") +
+      labs(x=constraint, y="Proportion", fill=variant) +
       theme_bw(base_size=16)
   }
   
@@ -186,21 +195,24 @@ server <- function(input, output, session) {
     tagList(
       plotOutput("plot1"),
       plotOutput("plot2"),
-      downloadButton("downloadPlots", "Download plots")
+      h3("If you right-click on a plot and click 'Copy image', you can paste it into your presentation")
     )
   })
   
   ##Render plots
   output$plot1 <- renderPlot({
-    plotMe(input$const1Col, input$const1Col)
+    # plotMe(input$const1Col, input$const1Col)
+    plotMe(input$const1Col, input$varCol)
   }) %>% 
     ##Only run when "Generate plots" is clicked
     bindEvent(input$genPlots)
   output$plot2 <- renderPlot({
-    plotMe(input$const2Col, input$const2Col)
+    # plotMe(input$const2Col, input$const2Col)
+    plotMe(input$const2Col, input$varCol)
   }) %>% 
     ##Only run when "Generate plots" is clicked
     bindEvent(input$genPlots)
+  
 }
 
 

@@ -19,9 +19,3 @@
 button#genPlots {
   font-weight: bold;
 }
-
-/* More space below download button */
-a#downloadPlots {
-  margin-bottom: 30px;
-  font-weight: bold;
-}
