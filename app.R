@@ -1,6 +1,7 @@
 ## LVC-plotter Shiny app
 
 library(shiny)
+library(stringi) ##For guess_encoding()
 library(readr)
 library(rlang)
 library(dplyr)
@@ -9,29 +10,12 @@ library(magrittr)
 library(ggplot2)
 
 
-# Test data ---------------------------------------------------------------
-
-# testData <- 
-#   tidyr::expand_grid(Variety = c("Standard American", 
-#                                  "Appalachian working class", 
-#                                  "Southern African American working class", 
-#                                  "Native American Puebloan"),
-#                      Foll_seg = c("Consonant", "Non-consonant"),
-#                      Morpho_status = c("Non-past", "Past")) %>% 
-#   cbind(Deleted = c(66, 36, 12, 3,
-#                     74, 67, 16, 5,
-#                     88, 50, 72, 36,
-#                     98, 92, 88, 81)) %>% 
-#   mutate(Retained = 100 - Deleted) %>% 
-#   pivot_longer(Deleted:Retained, names_to="Variant", values_to="n") %>% 
-#   uncount(n)
-# write.csv(testData, "TestData.csv", row.names=FALSE)
 
 # Parameters ------------------------------------------------------------------
 
 ##Automatically use given csv to expedite testing; set to NULL to force drag-n-drop
 testFile <- NULL
-# testFile <- "./TestData2.csv"
+# testFile <- "./Test-Data-LaBBCAT-Columns.csv"
 
 ##Debugging
 ##Show additional UI element(s) at top of main panel for debugging?
@@ -125,8 +109,10 @@ server <- function(input, output, session) {
     
     df <- eventReactive(input$file, {
       filePath <- input$file$datapath[1]
+      
       if (endsWith(filePath, ".csv")) {
-        read_csv(filePath, na="", show_col_types=FALSE)
+        enc <- guess_encoding(filePath)$encoding[1]
+        read_csv(filePath, na="", show_col_types=FALSE, locale=locale(encoding=enc))
       } else if (grepl("\\.xlsx?$", filePath)) {
         readxl::read_excel(filePath, na="")
       } else {
@@ -171,9 +157,34 @@ server <- function(input, output, session) {
       c(varCol = "Coded variants", const1Col = "Constraint #1", const2Col = "Constraint #2") %>% 
         imap(~ selectInput(.y, .x, choices=setdiff(colnames(df()), exclCols))) %>% 
         map(tagAppendAttributes, class="selectAlign"),
+      checkboxInput("exclLCCols", "Exclude common LaBB-CAT columns", value=TRUE)
     )
   })
   
+  ##Implement reactivity to "Exclude common LaBB-CAT columns" button
+  observeEvent(input$exclLCCols, {
+    ##Get current selections
+    currSel <- 
+      c("varCol", "const1Col", "const2Col") %>% 
+      set_names(., .) %>% 
+      map(~ input[[.x]])
+    
+    if (input$exclLCCols) {
+      ##New choices
+      newChoices <- setdiff(colnames(df()), exclCols)
+      currSel %>% 
+        imap(~ updateSelectInput(session, .y, 
+                                 ##Preserve current selection if it's eligible 
+                                 ##(if not, selected=NULL defaults to first choice)
+                                 selected=if (.x %in% newChoices) .x,
+                                 choices=newChoices))
+    } else {
+      ##Update select input
+      currSel %>% 
+        imap(~ updateSelectInput(session, .y, selected=.x, 
+                                 choices=colnames(df())))
+    }
+  })
   
   ##"Generate plots" button
   output$genPlotsButton <- renderUI({
@@ -199,7 +210,6 @@ server <- function(input, output, session) {
     req(input$genPlots)
     tagList(
       h3(textOutput("tokenCount"), class="summary"),
-      # h3(textOutput("variantDist"), class="summary"),
       uiOutput("variantDist"),
       uiOutput("constDists"),
       plotOutput("plot1"),
@@ -216,6 +226,7 @@ server <- function(input, output, session) {
     ##Only run when "Generate plots" is clicked
     bindEvent(input$genPlots)
   
+  ##Function to format distributions of categorical variables as bullet-lists with percentages
   distrib <- function(col, data=df()) {
     tags$ul(
       data %>% 
@@ -234,11 +245,22 @@ server <- function(input, output, session) {
   }
   
   ##Variant distribution
-  # output$variantDist <- renderText({
   output$variantDist <- renderUI({
     tagList(
       h3("Variant distribution:", class="summary"),
       distrib(input$varCol)
+    )
+  }) %>% 
+    ##Only run when "Generate plots" is clicked
+    bindEvent(input$genPlots)
+  
+  ##Constraint distributions
+  output$constDists <- renderUI({
+    fluidRow(
+      c(input$const1Col, input$const2Col) %>%
+        imap(~ column(6,
+                      h3(paste0("Constraint #", .y, " distribution:"), class="summary"),
+                      distrib(.x)))
     )
   }) %>% 
     ##Only run when "Generate plots" is clicked
