@@ -36,7 +36,7 @@ ui <- fluidPage(
   ),
   titlePanel("Plot LVC data"),
   h4("Dan Villarreal (University of Pittsburgh)"), 
-  h4("Linguistic Variation & Change (LING 1269) Fall 2022"),
+  h4("Linguistic Variation & Change (LING 1269)"),
   sidebarLayout(
     sidebarPanel(
       ##Instructions
