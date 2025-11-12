@@ -24,8 +24,9 @@ showDebug <- FALSE
 ##Columns excluded from selectability
 exclCols <- c("SearchName", "Number", "Transcript", "Speaker", "Line", "LineEnd", 
               "MatchId", "URL", "Before Match", "Text", "After Match", "Target word", 
-              "Target word start", "Target word end", "Target orthography", 
-              "Match segment", "Target segment", "Target segment start", "Target segment end")
+              "Target word start", "Target word end",
+              "Match segment", "Target segment start", "Target segment end",
+              "Title", "DataVersion", "word", "word start", "word end", "segment start", "segment end")
 
 
 # UI ----------------------------------------------------------------------
