@@ -1,1 +1,1 @@
-Rscript -e "rsconnect::deployApp(appFiles=c('app.R'), launch.browser=FALSE)"
+Rscript -e "rsconnect::deployApp(appFiles=c('app.R'), launch.browser=FALSE, forceUpdate=TRUE)"
