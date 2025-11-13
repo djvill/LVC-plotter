@@ -15,6 +15,14 @@
   width: 100%;
 }
 
+/* Token exclusions */
+#excludeTokens .form-group {
+  margin: 0;
+}
+#excludeTokens .form-group:last-child {
+  margin-bottom: 15px;
+}
+
 /* "Generate plots" button */
 button#genPlots {
   font-weight: bold;

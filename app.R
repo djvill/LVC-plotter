@@ -7,9 +7,8 @@ library(rlang)
 library(dplyr)
 library(purrr)
 library(magrittr)
+library(tidyr)
 library(ggplot2)
-
-
 
 # Parameters ------------------------------------------------------------------
 
@@ -28,6 +27,9 @@ exclCols <- c("SearchName", "Number", "Transcript", "Speaker", "Line", "LineEnd"
               "Match segment", "Target segment start", "Target segment end",
               "Title", "DataVersion", "word", "word start", "word end", "segment start", "segment end")
 
+##Special codes from CodeTokens.praat
+unsureToken <- "(unsure)"
+excludedToken <- "(not a token)"
 
 # UI ----------------------------------------------------------------------
 
@@ -56,6 +58,7 @@ ui <- fluidPage(
       
       ##Configuration settings
       uiOutput("selectCol"),
+      uiOutput("excludeTokens"),
       uiOutput("genPlotsButton")
     ),
     
@@ -143,7 +146,8 @@ server <- function(input, output, session) {
   ##Verbatim debugging text (works best if a list() of objects with names from
   ##  environment, to 'peek into' environment)
   output$debugContent <- renderPrint({
-    list()
+    list(`df()` = df(),
+         `filtered_df()` = filtered_df())
   })
   
   ##Config options
@@ -156,7 +160,7 @@ server <- function(input, output, session) {
       ##Column selection (will create 3 selection inputs)
       h3("Select columns"),
       c(varCol = "Coded variants", const1Col = "Constraint #1", const2Col = "Constraint #2") %>% 
-        imap(~ selectInput(.y, .x, choices=setdiff(colnames(df()), exclCols))) %>% 
+        imap(~ selectInput(.y, .x, choices=rev(setdiff(colnames(df()), exclCols)))) %>% 
         map(tagAppendAttributes, class="selectAlign"),
       checkboxInput("exclLCCols", "Exclude common LaBB-CAT columns", value=TRUE)
     )
@@ -187,6 +191,20 @@ server <- function(input, output, session) {
     }
   })
   
+  ##Token exclusions
+  output$excludeTokens <- renderUI({
+    ##Only show once data has been uploaded
+    req(df())
+    
+    tagList(
+      ##Column selection (will create 3 selection inputs)
+      h3("Exclude tokens"),
+      checkboxInput("exclBlank", "Exclude uncoded tokens", value=TRUE),
+      checkboxInput("exclUnsure", tagList(span("Exclude tokens marked"), code(unsureToken)), value=TRUE),
+      checkboxInput("exclNotAToken", tagList(span("Exclude tokens marked"), code(excludedToken)), value=TRUE)
+    )
+  })
+  
   ##"Generate plots" button
   output$genPlotsButton <- renderUI({
     ##Only show once data has been uploaded
@@ -195,10 +213,31 @@ server <- function(input, output, session) {
     actionButton("genPlots", "Generate plots")
   })
   
+  ##Implement token exclusions
+  filtered_df <- eventReactive(input$genPlots, {
+    x <- 
+      df() |>
+      mutate(across(all_of(input$varCol), \(x) replace_na(x, "(blank)")))
+    
+    if (input$exclBlank) {
+      x <- x |>
+        filter(if_any(all_of(input$varCol), \(x) x != "(blank)"))
+    }
+    if (input$exclUnsure) {
+      x <- x |>
+        filter(if_any(all_of(input$varCol), \(x) x != unsureToken))
+    }
+    if (input$exclNotAToken) {
+      x <- x |>
+        filter(if_any(all_of(input$varCol), \(x) x != excludedToken))
+    }
+    
+    x
+  })
   
   ##Plotting wrapper function
     ##(sym() solution from https://stackoverflow.com/a/49870618)
-  plotMe <- function(constraint, variant, data=df()) {
+  plotMe <- function(constraint, variant, data=filtered_df()) {
     ggplot(data, aes(x=!!sym(constraint), fill=!!sym(variant))) + 
       geom_bar(position="fill") +
       labs(x=constraint, y="Proportion", fill=variant) +
@@ -210,7 +249,7 @@ server <- function(input, output, session) {
     ##Only appear if "Generate plots" has been clicked
     req(input$genPlots)
     tagList(
-      h3(textOutput("tokenCount"), class="summary"),
+      uiOutput("tokenCount"),
       uiOutput("variantDist"),
       uiOutput("constDists"),
       plotOutput("plot1"),
@@ -220,15 +259,58 @@ server <- function(input, output, session) {
   })
   
   ##Summary stats
-  output$tokenCount <- renderText({
-    ##Put together string
-    paste0("Token count: ", sum(!is.na(df()[[input$varCol]])))
+  output$tokenCount <- renderUI({
+    ##Heading
+    tcTags <- list(
+      h3(paste("Sample size:",
+                sum(!is.na(filtered_df()[[input$varCol]]))),
+         class="summary")
+    )
+    
+    if (any(input$exclBlank, input$exclUnsure, input$exclNotAToken)) {
+      exclCounts <- list()
+      
+      if (input$exclBlank) {
+        exclCounts <- exclCounts |>
+          c(paste("Uncoded tokens: ",
+                  df() |>
+                    filter(if_any(all_of(input$varCol), is.na)) |>
+                    nrow())
+          )
+      }
+      if (input$exclUnsure) {
+        exclCounts <- exclCounts |>
+          c(list(tagList(span("Tokens marked"), code(unsureToken),
+                         span(df() |>
+                                filter(if_any(all_of(input$varCol), \(x) x == unsureToken)) |>
+                                nrow())))
+          )
+      }
+      if (input$exclNotAToken) {
+        exclCounts <- exclCounts |>
+          c(list(tagList(span("Tokens marked"), code(excludedToken),
+                         span(df() |>
+                                filter(if_any(all_of(input$varCol), \(x) x == excludedToken)) |>
+                                nrow())))
+          )
+      }
+      
+      exclCounts <- exclCounts |>
+        map(h5) |>
+        map(tags$li)
+      
+      tcTags <- tagList(tcTags,
+                        tags$ul(tags$li(h4(paste("Excluded:", nrow(df()) - nrow(filtered_df()))),
+                                        tags$ul(exclCounts))))
+    }
+    
+    tcTags
   }) %>% 
     ##Only run when "Generate plots" is clicked
     bindEvent(input$genPlots)
   
   ##Function to format distributions of categorical variables as bullet-lists with percentages
-  distrib <- function(col, data=df()) {
+  distrib <- function(col, data=filtered_df()) {
     tags$ul(
       data %>% 
         filter(!is.na(!!col)) %>% 
